@@ -156,14 +156,93 @@ elif page == "Nouveau devis":
             a,b,c = st.columns(3)
             prix_ml = a.number_input("Prix PVC (DA/ml)", min_value=0.0, value=float(profil.get("prix_ml",6000)), step=100.0)
             prix_m2 = b.number_input("Prix vitrage (DA/m²)", min_value=0.0, value=float(vitrage.get("prix_m2",2500)), step=100.0)
-            mode_vitrage = c.selectbox("Calcul vitrage", ["Surface brute","Dimensions réelles"])
-            if mode_vitrage == "Dimensions réelles":
-                a,b,c = st.columns(3)
-                largeur_v = a.number_input("Largeur vitrage (m)", min_value=0.01, value=1.10, step=0.01)
-                hauteur_v = b.number_input("Hauteur vitrage (m)", min_value=0.01, value=1.30, step=0.01)
-                nb_vitrages = c.number_input("Nombre de vitrages par unité", min_value=1, max_value=20, value=int(vantaux), step=1)
+            
+            mode_vitrage = c.selectbox(
+                "Mode de calcul du vitrage",
+                [
+                    "Surface brute",
+                    "Dimensions réelles - manuel",
+                    "Dimensions réelles - automatique",
+                ],
+            )
+
+            if mode_vitrage == "Dimensions réelles - manuel":
+                st.markdown("**Dimensions réelles du verre**")
+                a, b, c = st.columns(3)
+
+                largeur_v = a.number_input(
+                    "Largeur du verre (m)",
+                    min_value=0.001,
+                    value=1.10,
+                    step=0.01,
+                    format="%.3f",
+                )
+                hauteur_v = b.number_input(
+                    "Hauteur du verre (m)",
+                    min_value=0.001,
+                    value=1.30,
+                    step=0.01,
+                    format="%.3f",
+                )
+                nb_vitrages = c.number_input(
+                    "Nombre de vitrages par menuiserie",
+                    min_value=1,
+                    max_value=20,
+                    value=int(vantaux),
+                    step=1,
+                )
+
+            elif mode_vitrage == "Dimensions réelles - automatique":
+                st.markdown("**Calcul automatique des dimensions du verre**")
+                st.caption(
+                    "Les déductions sont saisies en millimètres. "
+                    "Le calcul suppose des vitrages de même largeur."
+                )
+
+                a, b, c = st.columns(3)
+
+                nb_vitrages = a.number_input(
+                    "Nombre de vitrages par menuiserie",
+                    min_value=1,
+                    max_value=20,
+                    value=int(vantaux),
+                    step=1,
+                )
+                deduction_largeur_mm = b.number_input(
+                    "Déduction totale en largeur (mm)",
+                    min_value=0.0,
+                    value=100.0,
+                    step=5.0,
+                )
+                deduction_hauteur_mm = c.number_input(
+                    "Déduction totale en hauteur (mm)",
+                    min_value=0.0,
+                    value=100.0,
+                    step=5.0,
+                )
+
+                largeur_v = (
+                    largeur / int(nb_vitrages)
+                    - deduction_largeur_mm / 1000
+                )
+                hauteur_v = hauteur - deduction_hauteur_mm / 1000
+
+                if largeur_v > 0 and hauteur_v > 0:
+                    st.info(
+                        f"Dimensions calculées par vitrage : "
+                        f"{largeur_v:.3f} m × {hauteur_v:.3f} m"
+                    )
+                else:
+                    st.error(
+                        "Les déductions sont trop importantes : "
+                        "vérifie les dimensions et le nombre de vitrages."
+                    )
+
             else:
-                largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
+                largeur_v = largeur
+                hauteur_v = hauteur
+                nb_vitrages = 1
+
             st.markdown("**Accessoires**")
             choix_accessoires = st.multiselect("Ajouter des accessoires", accessoires, format_func=lambda x: f"{x['nom']} — {money(x['prix_unitaire'])}/{x.get('unite','unité')}")
             accessoires_qte = {}
