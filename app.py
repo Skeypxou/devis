@@ -140,7 +140,7 @@ elif page == "Nouveau devis":
     else:
         client = st.selectbox("Client", [c for c in clients if c.get("actif",True)], format_func=lambda c: f"{c['nom']} — {c.get('telephone','')}")
         st.subheader("Menuiserie")
-        with st.form("quote_form"):
+        with st.container():
             a,b,c = st.columns(3)
             categorie = a.selectbox("Type de produit", ["Fenêtre","Porte-fenêtre","Baie vitrée","Rideau manuel","Rideau électrique","Porte PVC","Imposte"])
             designation = b.text_input("Désignation", value="Menuiserie PVC")
@@ -253,13 +253,20 @@ elif page == "Nouveau devis":
             remise = b.number_input("Remise (DA)", min_value=0.0, value=0.0, step=100.0)
             profil_extra = c.number_input("Profilés supplémentaires (ml/unité)", min_value=0.0, value=0.0, step=0.1)
             observations = st.text_area("Observations / conditions particulières")
-            submit_quote = st.form_submit_button("Calculer et enregistrer le devis", type="primary")
+            submit_quote = st.button("Calculer et enregistrer le devis", type="primary")
         if submit_quote:
             try:
+                if largeur_v <= 0 or hauteur_v <= 0:
+                    st.error(
+                        "Les dimensions du vitrage doivent être positives. "
+                        "Réduis les déductions ou vérifie les dimensions."
+                    )
+                    st.stop()
+
                 regle = params.get("regle_un_vantail","cadre_seul")
                 metrage = calculer_metrage_pvc(largeur, hauteur, int(vantaux), prix_ml, int(quantite), regle, profil_extra)
                 surf = calculer_surface_vitrage(largeur, hauteur, int(quantite),
-                    "dimensions_reelles" if mode_vitrage == "Dimensions réelles" else "brute",
+                    "dimensions_reelles" if mode_vitrage != "Surface brute" else "brute",
                     largeur_v, hauteur_v, int(nb_vitrages))
                 cout_vit = surf["surface_totale"] * prix_m2
                 cout_acc_unitaire = sum(float(a["prix_unitaire"])*accessoires_qte[a["id"]] for a in choix_accessoires)
