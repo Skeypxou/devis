@@ -142,107 +142,66 @@ elif page == "Nouveau devis":
         st.subheader("Menuiserie")
         with st.container():
             a,b,c = st.columns(3)
-            categorie = a.selectbox("Type de produit", ["Fenêtre","Porte-fenêtre","Baie vitrée","Rideau manuel","Rideau électrique","Porte PVC","Imposte"])
+            categorie = a.selectbox("Type de produit", ["Fenêtre","Porte-fenêtre","Baie vitrée","Rideau manuel","Rideau motorisé","Porte PVC","Imposte"])
             designation = b.text_input("Désignation", value="Menuiserie PVC")
             quantite = c.number_input("Quantité", min_value=1, max_value=1000, value=1, step=1)
             a,b,c = st.columns(3)
             largeur = a.number_input("Largeur (m)", min_value=0.01, max_value=20.0, value=1.20, step=0.05, format="%.2f")
             hauteur = b.number_input("Hauteur (m)", min_value=0.01, max_value=20.0, value=1.40, step=0.05, format="%.2f")
-            vantaux = c.number_input("Nombre de vantaux", min_value=1, max_value=12, value=2, step=1)
-            a,b,c = st.columns(3)
-            ouverture = a.selectbox("Ouverture", ["Coulissant","Ouverture simple","Oscillo-battant","Autre"])
-            vitrage = b.selectbox("Vitrage", vitrages, format_func=lambda x: x["nom"])
-            profil = c.selectbox("Profilé PVC", profiles, format_func=lambda x: f"{x['nom']} ({money(x['prix_ml'])}/ml)")
-            a,b,c = st.columns(3)
-            prix_ml = a.number_input("Prix PVC (DA/ml)", min_value=0.0, value=float(profil.get("prix_ml",6000)), step=100.0)
-            prix_m2 = b.number_input("Prix vitrage (DA/m²)", min_value=0.0, value=float(vitrage.get("prix_m2",2500)), step=100.0)
-            
-            mode_vitrage = c.selectbox(
-                "Mode de calcul du vitrage",
-                [
-                    "Surface brute",
-                    "Dimensions réelles - manuel",
-                    "Dimensions réelles - automatique",
-                ],
-            )
+            est_rideau = categorie in ("Rideau manuel", "Rideau motorisé", "Rideau électrique")
 
-            if mode_vitrage == "Dimensions réelles - manuel":
-                st.markdown("**Dimensions réelles du verre**")
-                a, b, c = st.columns(3)
-
-                largeur_v = a.number_input(
-                    "Largeur du verre (m)",
-                    min_value=0.001,
-                    value=1.10,
-                    step=0.01,
-                    format="%.3f",
-                )
-                hauteur_v = b.number_input(
-                    "Hauteur du verre (m)",
-                    min_value=0.001,
-                    value=1.30,
-                    step=0.01,
-                    format="%.3f",
-                )
-                nb_vitrages = c.number_input(
-                    "Nombre de vitrages par menuiserie",
-                    min_value=1,
-                    max_value=20,
-                    value=int(vantaux),
-                    step=1,
-                )
-
-            elif mode_vitrage == "Dimensions réelles - automatique":
-                st.markdown("**Calcul automatique des dimensions du verre**")
-                st.caption(
-                    "Les déductions sont saisies en millimètres. "
-                    "Le calcul suppose des vitrages de même largeur."
-                )
-
-                a, b, c = st.columns(3)
-
-                nb_vitrages = a.number_input(
-                    "Nombre de vitrages par menuiserie",
-                    min_value=1,
-                    max_value=20,
-                    value=int(vantaux),
-                    step=1,
-                )
-                deduction_largeur_mm = b.number_input(
-                    "Déduction totale en largeur (mm)",
-                    min_value=0.0,
-                    value=100.0,
-                    step=5.0,
-                )
-                deduction_hauteur_mm = c.number_input(
-                    "Déduction totale en hauteur (mm)",
-                    min_value=0.0,
-                    value=100.0,
-                    step=5.0,
-                )
-
-                largeur_v = (
-                    largeur / int(nb_vitrages)
-                    - deduction_largeur_mm / 1000
-                )
-                hauteur_v = hauteur - deduction_hauteur_mm / 1000
-
-                if largeur_v > 0 and hauteur_v > 0:
-                    st.info(
-                        f"Dimensions calculées par vitrage : "
-                        f"{largeur_v:.3f} m × {hauteur_v:.3f} m"
-                    )
-                else:
-                    st.error(
-                        "Les déductions sont trop importantes : "
-                        "vérifie les dimensions et le nombre de vitrages."
-                    )
-
+            if est_rideau:
+                st.markdown("**Calcul du rideau au mètre carré**")
+                st.caption("Surface = largeur × hauteur. Le prix est saisi en dinars algériens par m².")
+                prix_rideau_m2 = st.number_input("Prix du rideau (DA/m²)", min_value=0.0, value=6000.0, step=100.0, key="prix_rideau_m2")
+                surface_rideau_unitaire = largeur * hauteur
+                surface_rideau_totale = surface_rideau_unitaire * int(quantite)
+                st.info(f"Surface par rideau : {surface_rideau_unitaire:.2f} m² · Surface totale : {surface_rideau_totale:.2f} m² · Prix total : {money(surface_rideau_totale * prix_rideau_m2)}")
+                # Valeurs neutres conservées pour que les autres champs de la ligne restent compatibles.
+                vantaux = 1
+                ouverture = "Non applicable"
+                vitrage = {"nom": "Non applicable", "prix_m2": 0}
+                profil = {"nom": "Rideau", "prix_ml": 0}
+                prix_ml = 0.0
+                prix_m2 = 0.0
+                mode_vitrage = "Surface brute"
+                largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
+                profil_extra = 0.0
             else:
-                largeur_v = largeur
-                hauteur_v = hauteur
-                nb_vitrages = 1
+                vantaux = c.number_input("Nombre de vantaux", min_value=1, max_value=12, value=2, step=1)
+                a,b,c = st.columns(3)
+                ouverture = a.selectbox("Ouverture", ["Coulissant","Ouverture simple","Oscillo-battant","Autre"])
+                vitrage = b.selectbox("Vitrage", vitrages, format_func=lambda x: x["nom"])
+                profil = c.selectbox("Profilé PVC", profiles, format_func=lambda x: f"{x['nom']} ({money(x['prix_ml'])}/ml)")
+                a,b,c = st.columns(3)
+                prix_ml = a.number_input("Prix PVC (DA/ml)", min_value=0.0, value=float(profil.get("prix_ml",6000)), step=100.0)
+                prix_m2 = b.number_input("Prix vitrage (DA/m²)", min_value=0.0, value=float(vitrage.get("prix_m2",2500)), step=100.0)
+                mode_vitrage = c.selectbox(
+                    "Mode de calcul du vitrage",
+                    ["Surface brute", "Dimensions réelles - manuel", "Dimensions réelles - automatique"],
+                )
 
+                if mode_vitrage == "Dimensions réelles - manuel":
+                    st.markdown("**Dimensions réelles du verre**")
+                    a, b, c = st.columns(3)
+                    largeur_v = a.number_input("Largeur du verre (m)", min_value=0.001, value=1.10, step=0.01, format="%.3f")
+                    hauteur_v = b.number_input("Hauteur du verre (m)", min_value=0.001, value=1.30, step=0.01, format="%.3f")
+                    nb_vitrages = c.number_input("Nombre de vitrages par menuiserie", min_value=1, max_value=20, value=int(vantaux), step=1)
+                elif mode_vitrage == "Dimensions réelles - automatique":
+                    st.markdown("**Calcul automatique des dimensions du verre**")
+                    st.caption("Les déductions sont saisies en millimètres. Le calcul suppose des vitrages de même largeur.")
+                    a, b, c = st.columns(3)
+                    nb_vitrages = a.number_input("Nombre de vitrages par menuiserie", min_value=1, max_value=20, value=int(vantaux), step=1)
+                    deduction_largeur_mm = b.number_input("Déduction totale en largeur (mm)", min_value=0.0, value=100.0, step=5.0)
+                    deduction_hauteur_mm = c.number_input("Déduction totale en hauteur (mm)", min_value=0.0, value=100.0, step=5.0)
+                    largeur_v = largeur / int(nb_vitrages) - deduction_largeur_mm / 1000
+                    hauteur_v = hauteur - deduction_hauteur_mm / 1000
+                    if largeur_v > 0 and hauteur_v > 0:
+                        st.info(f"Dimensions calculées par vitrage : {largeur_v:.3f} m × {hauteur_v:.3f} m")
+                    else:
+                        st.error("Les déductions sont trop importantes : vérifie les dimensions et le nombre de vitrages.")
+                else:
+                    largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
             st.markdown("**Accessoires**")
             choix_accessoires = st.multiselect("Ajouter des accessoires", accessoires, format_func=lambda x: f"{x['nom']} — {money(x['prix_unitaire'])}/{x.get('unite','unité')}")
             accessoires_qte = {}
@@ -251,7 +210,8 @@ elif page == "Nouveau devis":
             a,b,c = st.columns(3)
             autres = a.number_input("Fabrication / pose (DA)", min_value=0.0, value=float(params.get("frais_pose_par_defaut",0)), step=500.0)
             remise = b.number_input("Remise (DA)", min_value=0.0, value=0.0, step=100.0)
-            profil_extra = c.number_input("Profilés supplémentaires (ml/unité)", min_value=0.0, value=0.0, step=0.1)
+            if not est_rideau:
+                profil_extra = c.number_input("Profilés supplémentaires (ml/unité)", min_value=0.0, value=0.0, step=0.1)
             observations = st.text_area("Observations / conditions particulières")
             submit_quote = st.button("Calculer et enregistrer le devis", type="primary")
         if submit_quote:
@@ -263,12 +223,26 @@ elif page == "Nouveau devis":
                     )
                     st.stop()
 
-                regle = params.get("regle_un_vantail","cadre_seul")
-                metrage = calculer_metrage_pvc(largeur, hauteur, int(vantaux), prix_ml, int(quantite), regle, profil_extra)
-                surf = calculer_surface_vitrage(largeur, hauteur, int(quantite),
-                    "dimensions_reelles" if mode_vitrage != "Surface brute" else "brute",
-                    largeur_v, hauteur_v, int(nb_vitrages))
-                cout_vit = surf["surface_totale"] * prix_m2
+                if est_rideau:
+                    surface_rideau_unitaire = largeur * hauteur
+                    surface_rideau_totale = surface_rideau_unitaire * int(quantite)
+                    cout_rideau = surface_rideau_totale * prix_rideau_m2
+                    metrage = {"ml_total": 0.0, "ml_total_unitaire": 0.0, "ml_cadre": 0.0,
+                               "ml_horizontaux_ouvrants": 0.0, "ml_verticaux_ouvrants": 0.0,
+                               "cout_pvc_total": 0.0}
+                    surf = {"surface_totale": surface_rideau_totale}
+                    cout_vit = cout_rideau  # Compatibilité avec le calcul total et les anciens modèles PDF.
+                else:
+                    if largeur_v <= 0 or hauteur_v <= 0:
+                        st.error("Les dimensions du vitrage doivent être positives. Réduis les déductions ou vérifie les dimensions.")
+                        st.stop()
+                    regle = params.get("regle_un_vantail","cadre_seul")
+                    metrage = calculer_metrage_pvc(largeur, hauteur, int(vantaux), prix_ml, int(quantite), regle, profil_extra)
+                    surf = calculer_surface_vitrage(largeur, hauteur, int(quantite),
+                        "dimensions_reelles" if mode_vitrage != "Surface brute" else "brute",
+                        largeur_v, hauteur_v, int(nb_vitrages))
+                    cout_vit = surf["surface_totale"] * prix_m2
+                    cout_rideau = 0.0
                 cout_acc_unitaire = sum(float(a["prix_unitaire"])*accessoires_qte[a["id"]] for a in choix_accessoires)
                 cout_acc_total = cout_acc_unitaire * int(quantite)
                 total = calculer_total(metrage["cout_pvc_total"], cout_vit, cout_acc_total, autres, remise,
@@ -277,7 +251,12 @@ elif page == "Nouveau devis":
                     "designation":f"{categorie} — {designation}", "categorie":categorie,
                     "largeur":float(largeur),"hauteur":float(hauteur),"quantite":int(quantite),
                     "nb_vantaux":int(vantaux),"ouverture":ouverture,"vitrage":vitrage["nom"],
-                    "surface_vitrage":surf["surface_totale"],"prix_vitrage_m2":float(prix_m2),
+                    "surface_vitrage": 0.0 if est_rideau else surf["surface_totale"],
+                    "prix_vitrage_m2":float(prix_m2),
+                    "type_tarification":"surface_m2" if est_rideau else "vitrage",
+                    "surface_rideau":surf["surface_totale"] if est_rideau else 0.0,
+                    "prix_rideau_m2":float(prix_rideau_m2) if est_rideau else 0.0,
+                    "cout_rideau":round(cout_rideau,2),
                     "ml_total":metrage["ml_total"],"ml_unitaire":metrage["ml_total_unitaire"],
                     "cout_pvc":metrage["cout_pvc_total"],"cout_vitrage":round(cout_vit,2),
                     "cout_accessoires":round(cout_acc_total,2),"accessoires":[{"nom":a["nom"],"quantite_par_unite":accessoires_qte[a["id"]],"prix_unitaire":a["prix_unitaire"]} for a in choix_accessoires],
@@ -296,10 +275,16 @@ elif page == "Nouveau devis":
                 st.success(f"Devis {doc['numero']} enregistré.")
                 with st.expander("Détail du calcul", expanded=True):
                     x,y,z = st.columns(3)
-                    x.metric("Métrage PVC total", f"{metrage['ml_total']:.2f} ml")
-                    y.metric("Surface vitrage", f"{surf['surface_totale']:.2f} m²")
-                    z.metric("Total du devis", money(total["total_ttc"]))
-                    st.write(f"Cadre : {metrage['ml_cadre']:.2f} ml · Horizontaux ouvrants : {metrage['ml_horizontaux_ouvrants']:.2f} ml · Verticaux ouvrants : {metrage['ml_verticaux_ouvrants']:.2f} ml")
+                    if est_rideau:
+                        x.metric("Surface totale du rideau", f"{surface_rideau_totale:.2f} m²")
+                        y.metric("Prix du rideau", money(cout_rideau))
+                        z.metric("Total du devis", money(total["total_ttc"]))
+                        st.caption(f"Calcul : {largeur:.2f} m × {hauteur:.2f} m × {int(quantite)} unité(s) × {money(prix_rideau_m2)}/m²")
+                    else:
+                        x.metric("Métrage PVC total", f"{metrage['ml_total']:.2f} ml")
+                        y.metric("Surface vitrage", f"{surf['surface_totale']:.2f} m²")
+                        z.metric("Total du devis", money(total["total_ttc"]))
+                        st.write(f"Cadre : {metrage['ml_cadre']:.2f} ml · Horizontaux ouvrants : {metrage['ml_horizontaux_ouvrants']:.2f} ml · Verticaux ouvrants : {metrage['ml_verticaux_ouvrants']:.2f} ml")
                 pdf = generer_pdf(doc,params,"DEVIS")
                 st.download_button("📄 Télécharger le devis PDF", pdf, file_name=f"{doc['numero']}.pdf", mime="application/pdf")
             except Exception as exc:
