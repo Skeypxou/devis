@@ -134,282 +134,260 @@ elif page == "Clients":
         st.info("Aucun client correspondant.")
 
 elif page == "Nouveau devis":
-        # Panier temporaire : plusieurs produits dans un seul devis
+    # Panier temporaire : plusieurs produits dans un même devis
     if "panier_devis" not in st.session_state:
         st.session_state["panier_devis"] = []
-
     if "panier_client_id" not in st.session_state:
         st.session_state["panier_client_id"] = None
+
     st.title("Créer un devis")
-    if not clients:
-        st.warning("Ajoute d'abord un client dans la rubrique Clients.")
+    clients_actifs = [c for c in clients if c.get("actif", True)]
+
+    if not clients_actifs:
+        st.warning("Ajoute d'abord un client actif dans la rubrique Clients.")
+    elif not profiles or not vitrages:
+        st.warning("Ajoute au moins un profilé PVC et un type de vitrage dans « Catalogue et tarifs ».")
     else:
-        client = st.selectbox("Client", [c for c in clients if c.get("actif",True)], format_func=lambda c: f"{c['nom']} — {c.get('telephone','')}")
+        client = st.selectbox(
+            "Client",
+            clients_actifs,
+            format_func=lambda c: f"{c['nom']} — {c.get('telephone', '')}",
+            key="nouveau_devis_client",
+        )
+
         st.subheader("Menuiserie")
-        with st.container():
-            a,b,c = st.columns(3)
-            categorie = a.selectbox("Type de produit", ["Fenêtre","Porte-fenêtre","Baie vitrée","Rideau manuel","Rideau motorisé","Porte PVC","Imposte"])
-            designation = b.text_input("Désignation", value="Menuiserie PVC")
-            quantite = c.number_input("Quantité", min_value=1, max_value=1000, value=1, step=1)
-            a,b,c = st.columns(3)
-            largeur = a.number_input("Largeur (m)", min_value=0.01, max_value=20.0, value=1.20, step=0.05, format="%.2f")
-            hauteur = b.number_input("Hauteur (m)", min_value=0.01, max_value=20.0, value=1.40, step=0.05, format="%.2f")
-            est_rideau = categorie in ("Rideau manuel", "Rideau motorisé", "Rideau électrique")
+        a, b, c = st.columns(3)
+        categorie = a.selectbox(
+            "Type de produit",
+            ["Fenêtre", "Porte-fenêtre", "Baie vitrée", "Rideau manuel",
+             "Rideau motorisé", "Porte PVC", "Imposte"],
+        )
+        designation = b.text_input("Désignation", value="Menuiserie PVC")
+        quantite = c.number_input("Quantité", min_value=1, max_value=1000, value=1, step=1)
 
-            if est_rideau:
-                st.markdown("**Calcul du rideau au mètre carré**")
-                st.caption("Surface = largeur × hauteur. Le prix est saisi en dinars algériens par m².")
-                prix_rideau_m2 = st.number_input("Prix du rideau (DA/m²)", min_value=0.0, value=6000.0, step=100.0, key="prix_rideau_m2")
-                surface_rideau_unitaire = largeur * hauteur
-                surface_rideau_totale = surface_rideau_unitaire * int(quantite)
-                st.info(f"Surface par rideau : {surface_rideau_unitaire:.2f} m² · Surface totale : {surface_rideau_totale:.2f} m² · Prix total : {money(surface_rideau_totale * prix_rideau_m2)}")
-                # Valeurs neutres conservées pour que les autres champs de la ligne restent compatibles.
-                vantaux = 1
-                ouverture = "Non applicable"
-                vitrage = {"nom": "Non applicable", "prix_m2": 0}
-                profil = {"nom": "Rideau", "prix_ml": 0}
-                prix_ml = 0.0
-                prix_m2 = 0.0
-                mode_vitrage = "Surface brute"
-                largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
-                profil_extra = 0.0
+        a, b, c = st.columns(3)
+        largeur = a.number_input("Largeur (m)", min_value=0.01, max_value=20.0, value=1.20, step=0.05, format="%.2f")
+        hauteur = b.number_input("Hauteur (m)", min_value=0.01, max_value=20.0, value=1.40, step=0.05, format="%.2f")
+        est_rideau = categorie in ("Rideau manuel", "Rideau motorisé")
+
+        if est_rideau:
+            st.markdown("**Calcul du rideau au mètre carré**")
+            prix_rideau_m2 = st.number_input(
+                "Prix du rideau (DA/m²)", min_value=0.0, value=6000.0, step=100.0, key="prix_rideau_m2"
+            )
+            surface_rideau_unitaire = largeur * hauteur
+            surface_rideau_totale = surface_rideau_unitaire * int(quantite)
+            st.info(
+                f"Surface unitaire : {surface_rideau_unitaire:.2f} m² · "
+                f"Surface totale : {surface_rideau_totale:.2f} m² · "
+                f"Prix total : {money(surface_rideau_totale * prix_rideau_m2)}"
+            )
+            vantaux = 1
+            ouverture = "Non applicable"
+            vitrage = {"nom": "Non applicable", "prix_m2": 0}
+            profil = {"nom": "Rideau", "prix_ml": 0}
+            prix_ml = 0.0
+            prix_m2 = 0.0
+            mode_vitrage = "Surface brute"
+            largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
+            profil_extra = 0.0
+        else:
+            vantaux = st.number_input("Nombre de vantaux", min_value=1, max_value=12, value=2, step=1)
+            a, b, c = st.columns(3)
+            ouverture = a.selectbox("Ouverture", ["Coulissant", "Ouverture simple", "Oscillo-battant", "Autre"])
+            vitrage = b.selectbox("Vitrage", vitrages, format_func=lambda x: x["nom"])
+            profil = c.selectbox("Profilé PVC", profiles, format_func=lambda x: f"{x['nom']} ({money(x['prix_ml'])}/ml)")
+            a, b, c = st.columns(3)
+            prix_ml = a.number_input("Prix PVC (DA/ml)", min_value=0.0, value=float(profil.get("prix_ml", 6000)), step=100.0)
+            prix_m2 = b.number_input("Prix vitrage (DA/m²)", min_value=0.0, value=float(vitrage.get("prix_m2", 2500)), step=100.0)
+            mode_vitrage = c.selectbox(
+                "Mode de calcul du vitrage",
+                ["Surface brute", "Dimensions réelles - manuel", "Dimensions réelles - automatique"],
+            )
+
+            deduction_largeur_mm = 0.0
+            deduction_hauteur_mm = 0.0
+            if mode_vitrage == "Dimensions réelles - manuel":
+                st.markdown("**Dimensions réelles du verre**")
+                a, b, c = st.columns(3)
+                largeur_v = a.number_input("Largeur du verre (m)", min_value=0.001, value=1.10, step=0.01, format="%.3f")
+                hauteur_v = b.number_input("Hauteur du verre (m)", min_value=0.001, value=1.30, step=0.01, format="%.3f")
+                nb_vitrages = c.number_input("Nombre de vitrages par menuiserie", min_value=1, max_value=20, value=int(vantaux), step=1)
+            elif mode_vitrage == "Dimensions réelles - automatique":
+                st.markdown("**Déductions manuelles pour calcul automatique du vitrage**")
+                st.caption("Les déductions sont saisies en millimètres. Le calcul suppose des vitrages de même largeur.")
+                a, b, c = st.columns(3)
+                nb_vitrages = a.number_input("Nombre de vitrages par menuiserie", min_value=1, max_value=20, value=int(vantaux), step=1)
+                deduction_largeur_mm = b.number_input("Déduction totale en largeur (mm)", min_value=0.0, value=100.0, step=5.0)
+                deduction_hauteur_mm = c.number_input("Déduction totale en hauteur (mm)", min_value=0.0, value=100.0, step=5.0)
+                largeur_v = largeur / int(nb_vitrages) - deduction_largeur_mm / 1000
+                hauteur_v = hauteur - deduction_hauteur_mm / 1000
+                if largeur_v > 0 and hauteur_v > 0:
+                    st.info(f"Dimensions calculées par vitrage : {largeur_v:.3f} m × {hauteur_v:.3f} m")
+                else:
+                    st.error("Les déductions sont trop importantes : vérifie les dimensions et le nombre de vitrages.")
             else:
-                vantaux = c.number_input("Nombre de vantaux", min_value=1, max_value=12, value=2, step=1)
-                a,b,c = st.columns(3)
-                ouverture = a.selectbox("Ouverture", ["Coulissant","Ouverture simple","Oscillo-battant","Autre"])
-                vitrage = b.selectbox("Vitrage", vitrages, format_func=lambda x: x["nom"])
-                profil = c.selectbox("Profilé PVC", profiles, format_func=lambda x: f"{x['nom']} ({money(x['prix_ml'])}/ml)")
-                a,b,c = st.columns(3)
-                prix_ml = a.number_input("Prix PVC (DA/ml)", min_value=0.0, value=float(profil.get("prix_ml",6000)), step=100.0)
-                prix_m2 = b.number_input("Prix vitrage (DA/m²)", min_value=0.0, value=float(vitrage.get("prix_m2",2500)), step=100.0)
-                mode_vitrage = c.selectbox(
-                    "Mode de calcul du vitrage",
-                    ["Surface brute", "Dimensions réelles - manuel", "Dimensions réelles - automatique"],
-                )
+                largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
 
-                if mode_vitrage == "Dimensions réelles - manuel":
-                    st.markdown("**Dimensions réelles du verre**")
-                    a, b, c = st.columns(3)
-                    largeur_v = a.number_input("Largeur du verre (m)", min_value=0.001, value=1.10, step=0.01, format="%.3f")
-                    hauteur_v = b.number_input("Hauteur du verre (m)", min_value=0.001, value=1.30, step=0.01, format="%.3f")
-                    nb_vitrages = c.number_input("Nombre de vitrages par menuiserie", min_value=1, max_value=20, value=int(vantaux), step=1)
-                elif mode_vitrage == "Dimensions réelles - automatique":
-                    st.markdown("**Calcul automatique des dimensions du verre**")
-                    st.caption("Les déductions sont saisies en millimètres. Le calcul suppose des vitrages de même largeur.")
-                    a, b, c = st.columns(3)
-                    nb_vitrages = a.number_input("Nombre de vitrages par menuiserie", min_value=1, max_value=20, value=int(vantaux), step=1)
-                    deduction_largeur_mm = b.number_input("Déduction totale en largeur (mm)", min_value=0.0, value=100.0, step=5.0)
-                    deduction_hauteur_mm = c.number_input("Déduction totale en hauteur (mm)", min_value=0.0, value=100.0, step=5.0)
-                    largeur_v = largeur / int(nb_vitrages) - deduction_largeur_mm / 1000
-                    hauteur_v = hauteur - deduction_hauteur_mm / 1000
-                    if largeur_v > 0 and hauteur_v > 0:
-                        st.info(f"Dimensions calculées par vitrage : {largeur_v:.3f} m × {hauteur_v:.3f} m")
-                    else:
-                        st.error("Les déductions sont trop importantes : vérifie les dimensions et le nombre de vitrages.")
-                else:
-                    largeur_v, hauteur_v, nb_vitrages = largeur, hauteur, 1
-            st.markdown("**Accessoires**")
-            choix_accessoires = st.multiselect("Ajouter des accessoires", accessoires, format_func=lambda x: f"{x['nom']} — {money(x['prix_unitaire'])}/{x.get('unite','unité')}")
-            accessoires_qte = {}
-            for acc in choix_accessoires:
-                accessoires_qte[acc["id"]] = st.number_input(f"Quantité par menuiserie : {acc['nom']}", min_value=0, max_value=100, value=1, key=f"acc_{acc['id']}")
-            a,b,c = st.columns(3)
-            autres = a.number_input("Fabrication / pose (DA)", min_value=0.0, value=float(params.get("frais_pose_par_defaut",0)), step=500.0)
-            remise = b.number_input("Remise (DA)", min_value=0.0, value=0.0, step=100.0)
-            if not est_rideau:
-                profil_extra = c.number_input("Profilés supplémentaires (ml/unité)", min_value=0.0, value=0.0, step=0.1)
-            observations = st.text_area("Observations / conditions particulières")
-            submit_quote = st.button("➕ Ajouter ce produit au devis", type="primary")
-        if submit_quote:
+        st.markdown("**Accessoires**")
+        choix_accessoires = st.multiselect(
+            "Ajouter des accessoires",
+            accessoires,
+            format_func=lambda x: f"{x['nom']} — {money(x['prix_unitaire'])}/{x.get('unite', 'unité')}",
+        ) if accessoires else []
+        accessoires_qte = {}
+        for acc in choix_accessoires:
+            accessoires_qte[acc["id"]] = st.number_input(
+                f"Quantité par menuiserie : {acc['nom']}",
+                min_value=0, max_value=100, value=1, key=f"acc_{acc['id']}",
+            )
+
+        a, b, c = st.columns(3)
+        autres = a.number_input("Fabrication / pose (DA)", min_value=0.0, value=float(params.get("frais_pose_par_defaut", 0)), step=500.0)
+        remise = b.number_input("Remise (DA)", min_value=0.0, value=0.0, step=100.0)
+        if not est_rideau:
+            profil_extra = c.number_input("Profilés supplémentaires (ml/unité)", min_value=0.0, value=0.0, step=0.1)
+        observations = st.text_area("Observations / conditions particulières")
+
+        if st.button("➕ Ajouter ce produit au devis", type="primary"):
             try:
-                if largeur_v <= 0 or hauteur_v <= 0:
-                    st.error(
-                        "Les dimensions du vitrage doivent être positives. "
-                        "Réduis les déductions ou vérifie les dimensions."
-                    )
-                    st.stop()
-
-                if est_rideau:
-                    surface_rideau_unitaire = largeur * hauteur
-                    surface_rideau_totale = surface_rideau_unitaire * int(quantite)
-                    cout_rideau = surface_rideau_totale * prix_rideau_m2
-                    metrage = {"ml_total": 0.0, "ml_total_unitaire": 0.0, "ml_cadre": 0.0,
-                               "ml_horizontaux_ouvrants": 0.0, "ml_verticaux_ouvrants": 0.0,
-                               "cout_pvc_total": 0.0}
-                    surf = {"surface_totale": surface_rideau_totale}
-                    cout_vit = cout_rideau  # Compatibilité avec le calcul total et les anciens modèles PDF.
+                if not est_rideau and (largeur_v <= 0 or hauteur_v <= 0):
+                    st.error("Les dimensions du vitrage doivent être positives. Vérifie les dimensions et les déductions.")
                 else:
-                    if largeur_v <= 0 or hauteur_v <= 0:
-                        st.error("Les dimensions du vitrage doivent être positives. Réduis les déductions ou vérifie les dimensions.")
-                        st.stop()
-                    regle = params.get("regle_un_vantail","cadre_seul")
-                    metrage = calculer_metrage_pvc(largeur, hauteur, int(vantaux), prix_ml, int(quantite), regle, profil_extra)
-                    surf = calculer_surface_vitrage(largeur, hauteur, int(quantite),
-                        "dimensions_reelles" if mode_vitrage != "Surface brute" else "brute",
-                        largeur_v, hauteur_v, int(nb_vitrages))
-                    cout_vit = surf["surface_totale"] * prix_m2
-                    cout_rideau = 0.0
-                cout_acc_unitaire = sum(float(a["prix_unitaire"])*accessoires_qte[a["id"]] for a in choix_accessoires)
-                cout_acc_total = cout_acc_unitaire * int(quantite)
-                total = calculer_total(metrage["cout_pvc_total"], cout_vit, cout_acc_total, autres, remise,
-                                       params.get("taxe_active",False), params.get("taux_taxe",0))
-                ligne = {
-                    "designation":f"{categorie} — {designation}", "categorie":categorie,
-                    "largeur":float(largeur),"hauteur":float(hauteur),"quantite":int(quantite),
-                    "nb_vantaux":int(vantaux),"ouverture":ouverture,"vitrage":vitrage["nom"],
-                    "surface_vitrage": 0.0 if est_rideau else surf["surface_totale"],
-                    "prix_vitrage_m2":float(prix_m2),
-                    "type_tarification":"surface_m2" if est_rideau else "vitrage",
-                    "surface_rideau":surf["surface_totale"] if est_rideau else 0.0,
-                    "prix_rideau_m2":float(prix_rideau_m2) if est_rideau else 0.0,
-                    "cout_rideau":round(cout_rideau,2),
-                    "ml_total":metrage["ml_total"],"ml_unitaire":metrage["ml_total_unitaire"],
-                    "cout_pvc":metrage["cout_pvc_total"],"cout_vitrage":round(cout_vit,2),
-                    "cout_accessoires":round(cout_acc_total,2),"accessoires":[{"nom":a["nom"],"quantite_par_unite":accessoires_qte[a["id"]],"prix_unitaire":a["prix_unitaire"]} for a in choix_accessoires],
-                    "autres_couts":float(autres),"remise":float(remise),
-                    "total_ht_ligne": float(total["total_ht"]),
-                    "taxe_ligne": float(total["taxe"]),
-                    "total_ligne":total["total_ttc"],"details_metrage":metrage
-                }
-                doc =                # Éviter de mélanger les produits de clients différents
-                panier_client = st.session_state["panier_client_id"]
+                    if est_rideau:
+                        surface_rideau_totale = largeur * hauteur * int(quantite)
+                        cout_rideau = surface_rideau_totale * prix_rideau_m2
+                        metrage = {
+                            "ml_total": 0.0, "ml_total_unitaire": 0.0, "ml_cadre": 0.0,
+                            "ml_horizontaux_ouvrants": 0.0, "ml_verticaux_ouvrants": 0.0,
+                            "cout_pvc_total": 0.0,
+                        }
+                        surf = {"surface_totale": surface_rideau_totale}
+                        cout_vit = cout_rideau
+                    else:
+                        regle = params.get("regle_un_vantail", "cadre_seul")
+                        metrage = calculer_metrage_pvc(
+                            largeur, hauteur, int(vantaux), prix_ml, int(quantite), regle, profil_extra
+                        )
+                        surf = calculer_surface_vitrage(
+                            largeur, hauteur, int(quantite),
+                            "dimensions_reelles" if mode_vitrage != "Surface brute" else "brute",
+                            largeur_v, hauteur_v, int(nb_vitrages),
+                        )
+                        cout_vit = surf["surface_totale"] * prix_m2
+                        cout_rideau = 0.0
 
-                if st.session_state["panier_devis"] and panier_client != client["id"]:
-                    st.warning(
-                        "Le panier contient déjà les produits d'un autre client. "
-                        "Enregistre le devis ou vide le panier avant de changer de client."
+                    cout_acc_unitaire = sum(
+                        float(acc["prix_unitaire"]) * accessoires_qte[acc["id"]]
+                        for acc in choix_accessoires
                     )
-                else:
-                    st.session_state["panier_client_id"] = client["id"]
-                    ligne["id"] = uuid4().hex
-                    st.session_state["panier_devis"].append(ligne)
-                    st.success(
-                        f"Produit ajouté : {ligne['designation']} "
-                        f"(quantité : {ligne['quantite']})."
+                    cout_acc_total = cout_acc_unitaire * int(quantite)
+                    total = calculer_total(
+                        metrage["cout_pvc_total"], cout_vit, cout_acc_total, autres, remise,
+                        params.get("taxe_active", False), params.get("taux_taxe", 0),
                     )
+                    ligne = {
+                        "id": uuid4().hex,
+                        "designation": f"{categorie} — {designation}",
+                        "categorie": categorie,
+                        "largeur": float(largeur), "hauteur": float(hauteur), "quantite": int(quantite),
+                        "nb_vantaux": int(vantaux), "ouverture": ouverture, "vitrage": vitrage["nom"],
+                        "surface_vitrage": 0.0 if est_rideau else surf["surface_totale"],
+                        "prix_vitrage_m2": float(prix_m2),
+                        "type_tarification": "surface_m2" if est_rideau else "vitrage",
+                        "surface_rideau": surf["surface_totale"] if est_rideau else 0.0,
+                        "prix_rideau_m2": float(prix_rideau_m2) if est_rideau else 0.0,
+                        "cout_rideau": round(cout_rideau, 2),
+                        "ml_total": metrage["ml_total"], "ml_unitaire": metrage["ml_total_unitaire"],
+                        "cout_pvc": metrage["cout_pvc_total"], "cout_vitrage": round(cout_vit, 2),
+                        "cout_accessoires": round(cout_acc_total, 2),
+                        "accessoires": [
+                            {"nom": acc["nom"], "quantite_par_unite": accessoires_qte[acc["id"]],
+                             "prix_unitaire": acc["prix_unitaire"]}
+                            for acc in choix_accessoires
+                        ],
+                        "autres_couts": float(autres), "remise": float(remise),
+                        "total_ht_ligne": float(total["total_ht"]), "taxe_ligne": float(total["taxe"]),
+                        "total_ligne": float(total["total_ttc"]), "details_metrage": metrage,
+                        "prix_ml": float(prix_ml), "mode_vitrage": mode_vitrage,
+                        "largeur_vitrage": float(largeur_v), "hauteur_vitrage": float(hauteur_v),
+                        "nb_vitrages": int(nb_vitrages),
+                    }
+
+                    panier = st.session_state["panier_devis"]
+                    panier_client = st.session_state["panier_client_id"]
+                    if panier and panier_client != client["id"]:
+                        st.warning("Le panier contient déjà les produits d'un autre client. Enregistre le devis ou vide le panier avant de changer de client.")
+                    else:
+                        st.session_state["panier_client_id"] = client["id"]
+                        panier.append(ligne)
+                        st.success(f"Produit ajouté : {ligne['designation']} (quantité : {ligne['quantite']}).")
             except Exception as exc:
                 st.error(f"Impossible de calculer le produit : {exc}")
 
-        # Afficher les produits déjà ajoutés au devis
         panier = st.session_state["panier_devis"]
-
         if panier:
             st.divider()
             st.subheader("🧾 Produits du devis en cours")
-
             for index, produit in enumerate(panier):
                 gauche, milieu, droite = st.columns([5, 2, 1])
-
                 gauche.write(
                     f"**{index + 1}. {produit['designation']}**  \n"
-                    f"Quantité : {produit['quantite']} · "
-                    f"Dimensions : {produit['largeur']:.2f} × "
-                    f"{produit['hauteur']:.2f} m"
+                    f"Quantité : {produit['quantite']} · Dimensions : "
+                    f"{produit['largeur']:.2f} × {produit['hauteur']:.2f} m"
                 )
                 milieu.write(money(produit["total_ligne"]))
-
-                if droite.button("🗑️", key=f"retirer_produit_{produit['id']}"):
+                if droite.button("🗑️ Retirer", key=f"retirer_produit_{produit['id']}"):
                     st.session_state["panier_devis"].pop(index)
-
                     if not st.session_state["panier_devis"]:
                         st.session_state["panier_client_id"] = None
-
                     st.rerun()
 
-            total_panier = sum(
-                float(p.get("total_ligne", 0))
-                for p in panier
-            )
-
+            total_panier = sum(float(p.get("total_ligne", 0)) for p in panier)
             st.metric("TOTAL PROVISOIRE DU DEVIS", money(total_panier))
-
             col1, col2 = st.columns(2)
-
             with col1:
-                if st.button(
-                    "💾 Enregistrer le devis complet",
-                    type="primary",
-                    use_container_width=True,
-                ):
+                if st.button("💾 Enregistrer le devis complet", type="primary", use_container_width=True):
                     client_panier = next(
-                        (
-                            c for c in clients
-                            if c["id"] == st.session_state["panier_client_id"]
-                        ),
-                        None,
+                        (c for c in clients if c["id"] == st.session_state["panier_client_id"]), None
                     )
-
                     if client_panier is None:
                         st.error("Le client associé au panier est introuvable.")
                     else:
-                        lignes_finales = [
-                            dict(p) for p in st.session_state["panier_devis"]
-                        ]
-
-                        total_ht = sum(
-                            float(p.get("total_ht_ligne", p.get("total_ligne", 0)))
-                            for p in lignes_finales
-                        )
-                        taxe = sum(
-                            float(p.get("taxe_ligne", 0))
-                            for p in lignes_finales
-                        )
-                        total_ttc = sum(
-                            float(p.get("total_ligne", 0))
-                            for p in lignes_finales
-                        )
-
+                        lignes_finales = [dict(p) for p in panier]
                         doc = {
                             "id": uuid4().hex,
-                            "numero": next_number(
-                                devis, params.get("prefixe_devis", "DEV")
-                            ),
+                            "numero": next_number(devis, params.get("prefixe_devis", "DEV")),
                             "date": date.today().isoformat(),
                             "client_id": client_panier["id"],
                             "client_nom": client_panier["nom"],
                             "client_telephone": client_panier.get("telephone", ""),
                             "lignes": lignes_finales,
-                            "total_ht": round(total_ht, 2),
-                            "taxe": round(taxe, 2),
-                            "total_ttc": round(total_ttc, 2),
+                            "total_ht": round(sum(float(p.get("total_ht_ligne", p.get("total_ligne", 0))) for p in lignes_finales), 2),
+                            "taxe": round(sum(float(p.get("taxe_ligne", 0)) for p in lignes_finales), 2),
+                            "total_ttc": round(sum(float(p.get("total_ligne", 0)) for p in lignes_finales), 2),
                             "statut": "Brouillon",
                             "observations": observations,
                             "conditions": params.get("conditions_paiement", ""),
                             "type": "devis",
                         }
-
                         devis.append(doc)
                         save("devis", devis)
-
                         st.session_state["panier_devis"] = []
                         st.session_state["panier_client_id"] = None
-
-                        st.success(
-                            f"Devis {doc['numero']} enregistré avec "
-                            f"{len(lignes_finales)} produit(s)."
-                        )
-
-                        pdf = generer_pdf(doc, params, "DEVIS")
+                        st.success(f"Devis {doc['numero']} enregistré avec {len(lignes_finales)} produit(s).")
                         st.download_button(
                             "📄 Télécharger le devis PDF",
-                            data=pdf,
+                            data=generer_pdf(doc, params, "DEVIS"),
                             file_name=f"{doc['numero']}.pdf",
                             mime="application/pdf",
                             key=f"nouveau_pdf_{doc['id']}",
                         )
-
-                        st.rerun()
-
             with col2:
-                if st.button(
-                    "Vider le panier",
-                    use_container_width=True,
-                ):
+                if st.button("Vider le panier", use_container_width=True):
                     st.session_state["panier_devis"] = []
                     st.session_state["panier_client_id"] = None
                     st.rerun()
-            except Exception as exc:
-                st.error(f"Impossible de calculer le devis : {exc}")
 
 elif page == "Devis et factures":
     st.title("Devis et factures")
@@ -417,28 +395,75 @@ elif page == "Devis et factures":
     with tab1:
         if devis:
             for d in reversed(devis):
-                with st.expander(f"{d['numero']} · {d['client_nom']} · {money(d['total_ttc'])} · {d['statut']}"):
-                    st.write(f"Date : {d['date']} | Observations : {d.get('observations','—')}")
-                    st.dataframe(pd.DataFrame(d["lignes"]), use_container_width=True, hide_index=True)
-                    pdf = generer_pdf(d,params,"DEVIS")
-                    st.download_button("Télécharger PDF",pdf,file_name=f"{d['numero']}.pdf",mime="application/pdf",key=f"pdf_{d['id']}")
-                    statuses = ["Brouillon","Envoyé","Accepté","Refusé","Expiré"]
-                    status = st.selectbox("Statut",statuses,index=statuses.index(d["statut"]) if d["statut"] in statuses else 0,key=f"status_{d['id']}")
-                    if st.button("Enregistrer le statut",key=f"save_status_{d['id']}"):
-                        for item in devis:
-                            if item["id"] == d["id"]: item["statut"] = status
-                        save("devis",devis); st.rerun()
-                    already = next((f for f in factures if f.get("devis_id")==d["id"]),None)
-                    if d["statut"] == "Accepté" and not already:
-                        if st.button("Convertir en facture",key=f"convert_{d['id']}",type="primary"):
+                with st.expander(f"{d['numero']} · {d['client_nom']} · {money(d['total_ttc'])} · {d.get('statut', 'Brouillon')}"):
+                    st.write(f"Date : {d.get('date', '—')} | Observations : {d.get('observations', '—')}")
+                    st.dataframe(pd.DataFrame(d.get("lignes", [])), use_container_width=True, hide_index=True)
+                    pdf = generer_pdf(d, params, "DEVIS")
+                    st.download_button(
+                        "Télécharger PDF", pdf, file_name=f"{d['numero']}.pdf",
+                        mime="application/pdf", key=f"pdf_{d['id']}",
+                    )
+
+                    # Modification des informations générales du devis
+                    with st.expander("✏️ Modifier le devis"):
+                        statuses = ["Brouillon", "Envoyé", "Accepté", "Refusé", "Expiré"]
+                        old_status = d.get("statut", "Brouillon")
+                        if old_status not in statuses:
+                            old_status = "Brouillon"
+                        with st.form(f"edit_quote_{d['id']}"):
+                            status_edit = st.selectbox(
+                                "Statut du devis", statuses,
+                                index=statuses.index(old_status),
+                                key=f"edit_status_{d['id']}",
+                            )
+                            observations_edit = st.text_area(
+                                "Observations / conditions particulières",
+                                value=d.get("observations", ""),
+                                key=f"edit_obs_{d['id']}",
+                            )
+                            if st.form_submit_button("Enregistrer les modifications"):
+                                for item in devis:
+                                    if item.get("id") == d.get("id"):
+                                        item["statut"] = status_edit
+                                        item["observations"] = observations_edit
+                                save("devis", devis)
+                                st.success("Informations du devis mises à jour.")
+                                st.rerun()
+
+                    already = next((f for f in factures if f.get("devis_id") == d["id"]), None)
+                    if d.get("statut") == "Accepté" and not already:
+                        if st.button("Convertir en facture", key=f"convert_{d['id']}", type="primary"):
                             f = dict(d)
-                            f.update({"id":uuid4().hex,"numero":next_number(factures,params.get("prefixe_facture","FAC")),
-                                      "date":date.today().isoformat(),"statut_paiement":"Non payée","devis_id":d["id"],"type":"facture"})
-                            factures.append(f); save("factures",factures)
-                            st.success(f"Facture {f['numero']} créée."); st.rerun()
+                            f.update({
+                                "id": uuid4().hex,
+                                "numero": next_number(factures, params.get("prefixe_facture", "FAC")),
+                                "date": date.today().isoformat(),
+                                "statut_paiement": "Non payée",
+                                "devis_id": d["id"],
+                                "type": "facture",
+                            })
+                            factures.append(f)
+                            save("factures", factures)
+                            st.success(f"Facture {f['numero']} créée.")
+                            st.rerun()
                     elif already:
                         st.info(f"Facture déjà créée : {already['numero']}")
-        else: st.info("Aucun devis enregistré.")
+
+                    # Suppression protégée par une confirmation explicite
+                    if any(f.get("devis_id") == d["id"] for f in factures):
+                        st.warning("Une facture est liée à ce devis. Pour préserver l'historique comptable, la suppression est désactivée.")
+                    else:
+                        confirm_delete = st.checkbox(
+                            f"Je confirme la suppression du devis {d['numero']}",
+                            key=f"confirm_delete_{d['id']}",
+                        )
+                        if st.button("🗑️ Supprimer ce devis", key=f"delete_quote_{d['id']}", disabled=not confirm_delete):
+                            devis = [item for item in devis if item.get("id") != d.get("id")]
+                            save("devis", devis)
+                            st.success(f"Devis {d['numero']} supprimé.")
+                            st.rerun()
+        else:
+            st.info("Aucun devis enregistré.")
     with tab2:
         if factures:
             for f in reversed(factures):
