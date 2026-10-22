@@ -267,6 +267,8 @@ elif page == "Nouveau devis":
                     "cout_pvc":metrage["cout_pvc_total"],"cout_vitrage":round(cout_vit,2),
                     "cout_accessoires":round(cout_acc_total,2),"accessoires":[{"nom":a["nom"],"quantite_par_unite":accessoires_qte[a["id"]],"prix_unitaire":a["prix_unitaire"]} for a in choix_accessoires],
                     "autres_couts":float(autres),"remise":float(remise),
+                    "total_ht_ligne": float(total["total_ht"]),
+                    "taxe_ligne": float(total["taxe"]),
                     "total_ligne":total["total_ttc"],"details_metrage":metrage
                 }
                 doc = {
