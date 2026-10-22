@@ -271,30 +271,143 @@ elif page == "Nouveau devis":
                     "taxe_ligne": float(total["taxe"]),
                     "total_ligne":total["total_ttc"],"details_metrage":metrage
                 }
-                doc = {
-                    "id":uuid4().hex,"numero":next_number(devis,params.get("prefixe_devis","DEV")),
-                    "date":date.today().isoformat(),"client_id":client["id"],"client_nom":client["nom"],
-                    "client_telephone":client.get("telephone",""),"lignes":[ligne],
-                    "total_ht":total["total_ht"],"taxe":total["taxe"],"total_ttc":total["total_ttc"],
-                    "statut":"Brouillon","observations":observations,
-                    "conditions":params.get("conditions_paiement",""),"type":"devis"
-                }
-                devis.append(doc); save("devis",devis)
-                st.success(f"Devis {doc['numero']} enregistré.")
-                with st.expander("Détail du calcul", expanded=True):
-                    x,y,z = st.columns(3)
-                    if est_rideau:
-                        x.metric("Surface totale du rideau", f"{surface_rideau_totale:.2f} m²")
-                        y.metric("Prix du rideau", money(cout_rideau))
-                        z.metric("Total du devis", money(total["total_ttc"]))
-                        st.caption(f"Calcul : {largeur:.2f} m × {hauteur:.2f} m × {int(quantite)} unité(s) × {money(prix_rideau_m2)}/m²")
+                doc =                # Éviter de mélanger les produits de clients différents
+                panier_client = st.session_state["panier_client_id"]
+
+                if st.session_state["panier_devis"] and panier_client != client["id"]:
+                    st.warning(
+                        "Le panier contient déjà les produits d'un autre client. "
+                        "Enregistre le devis ou vide le panier avant de changer de client."
+                    )
+                else:
+                    st.session_state["panier_client_id"] = client["id"]
+                    ligne["id"] = uuid4().hex
+                    st.session_state["panier_devis"].append(ligne)
+                    st.success(
+                        f"Produit ajouté : {ligne['designation']} "
+                        f"(quantité : {ligne['quantite']})."
+                    )
+            except Exception as exc:
+                st.error(f"Impossible de calculer le produit : {exc}")
+
+        # Afficher les produits déjà ajoutés au devis
+        panier = st.session_state["panier_devis"]
+
+        if panier:
+            st.divider()
+            st.subheader("🧾 Produits du devis en cours")
+
+            for index, produit in enumerate(panier):
+                gauche, milieu, droite = st.columns([5, 2, 1])
+
+                gauche.write(
+                    f"**{index + 1}. {produit['designation']}**  \n"
+                    f"Quantité : {produit['quantite']} · "
+                    f"Dimensions : {produit['largeur']:.2f} × "
+                    f"{produit['hauteur']:.2f} m"
+                )
+                milieu.write(money(produit["total_ligne"]))
+
+                if droite.button("🗑️", key=f"retirer_produit_{produit['id']}"):
+                    st.session_state["panier_devis"].pop(index)
+
+                    if not st.session_state["panier_devis"]:
+                        st.session_state["panier_client_id"] = None
+
+                    st.rerun()
+
+            total_panier = sum(
+                float(p.get("total_ligne", 0))
+                for p in panier
+            )
+
+            st.metric("TOTAL PROVISOIRE DU DEVIS", money(total_panier))
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button(
+                    "💾 Enregistrer le devis complet",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    client_panier = next(
+                        (
+                            c for c in clients
+                            if c["id"] == st.session_state["panier_client_id"]
+                        ),
+                        None,
+                    )
+
+                    if client_panier is None:
+                        st.error("Le client associé au panier est introuvable.")
                     else:
-                        x.metric("Métrage PVC total", f"{metrage['ml_total']:.2f} ml")
-                        y.metric("Surface vitrage", f"{surf['surface_totale']:.2f} m²")
-                        z.metric("Total du devis", money(total["total_ttc"]))
-                        st.write(f"Cadre : {metrage['ml_cadre']:.2f} ml · Horizontaux ouvrants : {metrage['ml_horizontaux_ouvrants']:.2f} ml · Verticaux ouvrants : {metrage['ml_verticaux_ouvrants']:.2f} ml")
-                pdf = generer_pdf(doc,params,"DEVIS")
-                st.download_button("📄 Télécharger le devis PDF", pdf, file_name=f"{doc['numero']}.pdf", mime="application/pdf")
+                        lignes_finales = [
+                            dict(p) for p in st.session_state["panier_devis"]
+                        ]
+
+                        total_ht = sum(
+                            float(p.get("total_ht_ligne", p.get("total_ligne", 0)))
+                            for p in lignes_finales
+                        )
+                        taxe = sum(
+                            float(p.get("taxe_ligne", 0))
+                            for p in lignes_finales
+                        )
+                        total_ttc = sum(
+                            float(p.get("total_ligne", 0))
+                            for p in lignes_finales
+                        )
+
+                        doc = {
+                            "id": uuid4().hex,
+                            "numero": next_number(
+                                devis, params.get("prefixe_devis", "DEV")
+                            ),
+                            "date": date.today().isoformat(),
+                            "client_id": client_panier["id"],
+                            "client_nom": client_panier["nom"],
+                            "client_telephone": client_panier.get("telephone", ""),
+                            "lignes": lignes_finales,
+                            "total_ht": round(total_ht, 2),
+                            "taxe": round(taxe, 2),
+                            "total_ttc": round(total_ttc, 2),
+                            "statut": "Brouillon",
+                            "observations": observations,
+                            "conditions": params.get("conditions_paiement", ""),
+                            "type": "devis",
+                        }
+
+                        devis.append(doc)
+                        save("devis", devis)
+
+                        st.session_state["panier_devis"] = []
+                        st.session_state["panier_client_id"] = None
+
+                        st.success(
+                            f"Devis {doc['numero']} enregistré avec "
+                            f"{len(lignes_finales)} produit(s)."
+                        )
+
+                        pdf = generer_pdf(doc, params, "DEVIS")
+                        st.download_button(
+                            "📄 Télécharger le devis PDF",
+                            data=pdf,
+                            file_name=f"{doc['numero']}.pdf",
+                            mime="application/pdf",
+                            key=f"nouveau_pdf_{doc['id']}",
+                        )
+
+                        st.rerun()
+
+            with col2:
+                if st.button(
+                    "Vider le panier",
+                    use_container_width=True,
+                ):
+                    st.session_state["panier_devis"] = []
+                    st.session_state["panier_client_id"] = None
+                    st.rerun()
             except Exception as exc:
                 st.error(f"Impossible de calculer le devis : {exc}")
 
