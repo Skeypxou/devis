@@ -219,7 +219,7 @@ elif page == "Nouveau devis":
             if not est_rideau:
                 profil_extra = c.number_input("Profilés supplémentaires (ml/unité)", min_value=0.0, value=0.0, step=0.1)
             observations = st.text_area("Observations / conditions particulières")
-            submit_quote = st.button("Calculer et enregistrer le devis", type="primary")
+            submit_quote = st.button("➕ Ajouter ce produit au devis", type="primary")
         if submit_quote:
             try:
                 if largeur_v <= 0 or hauteur_v <= 0:
