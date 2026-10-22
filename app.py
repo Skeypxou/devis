@@ -134,6 +134,12 @@ elif page == "Clients":
         st.info("Aucun client correspondant.")
 
 elif page == "Nouveau devis":
+        # Panier temporaire : plusieurs produits dans un seul devis
+    if "panier_devis" not in st.session_state:
+        st.session_state["panier_devis"] = []
+
+    if "panier_client_id" not in st.session_state:
+        st.session_state["panier_client_id"] = None
     st.title("Créer un devis")
     if not clients:
         st.warning("Ajoute d'abord un client dans la rubrique Clients.")
